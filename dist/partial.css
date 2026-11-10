@@ -1,0 +1,90 @@
+.partial-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 8px 12px;
+  max-width: 760px;
+}
+.partial-fields .number { display: block; margin-top: 4px; }
+.partial-fields .field-heading .number, .partial-fields .seed-row .number { margin-top: 0; }
+#partial-form .partial-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#partial-form .field > select { display: block; margin-top: 4px; }
+.partial-input-fields { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); max-width: 400px; margin-block: 8px; }
+.partial-input-table { border-collapse: collapse; margin-block: 6px; }
+.partial-input-table th, .partial-input-table td { padding: 4px; text-align: start; font-size: .8rem; }
+.partial-input-table .number { min-width: 4.15rem; max-width: 7rem; }
+#partial-input-status { color: var(--stale); }
+.comparison-view .sweep-axes + .field-help { margin-top: 6px; }
+#partial-sweep-table { table-layout: fixed; border-collapse: collapse; }
+#partial-sweep-table :is(th, td) { padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+#partial-sweep-table th { font-size: .8rem; text-align: start; overflow-wrap: anywhere; }
+#partial-sweep-table th:first-child { width: 96px; }
+#partial-sweep-table svg { display: block; width: 100%; background: var(--hover); cursor: crosshair; }
+#partial-sweep-table figcaption { color: var(--muted); font-size: .75rem; margin-top: 3px; }
+.partial-result-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  max-width: 760px;
+  margin-bottom: 8px;
+}
+.partial-result-heading h3, .partial-detail h3 { margin-bottom: 3px; font-size: 1rem; }
+.partial-result-heading label { min-width: 8.5rem; }
+.partial-matrices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--matrix-min, 17rem)), 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.partial-matrices[data-wide] { grid-template-columns: minmax(0, 1fr); }
+.partial-matrix { min-width: 0; }
+.partial-matrix h3 { margin-bottom: 5px; font-size: .87rem; }
+.partial-matrix-scroll { overflow-x: auto; }
+.partial-matrix table { border-collapse: separate; border-spacing: 2px; }
+.partial-matrix th, .partial-matrix td { padding: 0; text-align: center; font: .75rem/1.25 var(--mono); }
+.partial-matrix th { padding-inline: 4px; color: var(--muted); }
+.partial-cell {
+  display: block;
+  width: 100%;
+  min-width: 3.25rem;
+  min-height: 32px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.partial-cell[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }
+.partial-cell:focus-visible { outline-offset: -4px; outline-color: currentColor; }
+.partial-scale { max-width: 16rem; }
+.partial-detail { max-width: 760px; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); }
+.partial-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 6px 10px;
+  margin-block: 8px;
+}
+.partial-metrics dt { color: var(--muted); font-size: .78rem; }
+.partial-metrics dd { margin: 0; font-size: 1.13rem; font-weight: 620; font-variant-numeric: tabular-nums; }
+.partial-track {
+  position: relative;
+  height: 18px;
+  margin-inline: 5px;
+  background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
+}
+.partial-track span { position: absolute; top: 50%; }
+.partial-interval { height: 7px; border-radius: 5px; background: var(--link); opacity: .3; transform: translateY(-50%); }
+.partial-reference { width: 2px; height: 17px; background: var(--text); transform: translate(-50%, -50%); }
+.partial-median { width: 9px; height: 9px; border-radius: 50%; background: var(--link); transform: translate(-50%, -50%); }
+.partial-track-axis { display: flex; justify-content: space-between; margin-block: 1px 5px; font-variant-numeric: tabular-nums; }
+#partial-pair-warning, #partial-status[data-state="stale"] { color: var(--stale); }
+.partial-method { max-width: 760px; margin-top: 13px; }
+.partial-method .metric-legend { margin-block: 5px; }
+
+@media (pointer: coarse) {
+  .partial-cell { min-height: 44px; }
+  .partial-fields select, .partial-result-heading select { font-size: 16px; }
+}

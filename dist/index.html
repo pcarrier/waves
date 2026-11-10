@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Paint a joint distribution and explore the distortion from differential privacy.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
+  <title>Privacy Waves · Differential Privacy Lab</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./partial.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" class="symbols" aria-hidden="true">
+    <symbol id="wave" viewBox="0 0 24 24"><path d="M2 12h3l3-7 4 14 4-14 3 7h3"/></symbol>
+    <symbol id="brush" viewBox="0 0 24 24"><path d="m14 13 6-7a2.1 2.1 0 0 0-3-3l-7 6m4 4-4-4m4 4-3 3m-1-7-3 3m4 4c.5 4-4 5-8 4 2-1 1-3 2-5 1-2 4-2 6 1Z"/></symbol>
+    <symbol id="eraser" viewBox="0 0 24 24"><path d="m7 19-4-4a2 2 0 0 1 0-3l8-8a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-7 7H7Zm-1-10 10 7m-4 3h9"/></symbol>
+    <symbol id="hand" viewBox="0 0 24 24"><path d="M8 13V5a1.5 1.5 0 0 1 3 0v6-8a1.5 1.5 0 0 1 3 0v8-6a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-2a6 6 0 0 1-4.8-2.4l-3.5-4.7a1.6 1.6 0 0 1 2.5-2L8 14"/></symbol>
+    <symbol id="undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><path d="m8 5 12 7-12 7Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></symbol>
+    <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  </svg>
+
+  <header class="masthead shell">
+    <div>
+      <div class="masthead-title">
+        <svg class="icon masthead-mark" aria-hidden="true"><use href="#wave"/></svg>
+        <h1>Privacy Waves</h1>
+      </div>
+      <p>Explore what privacy noise changes in synthetic data.</p>
+    </div>
+    <div class="header-actions">
+      <span id="backend" class="status-badge" aria-live="polite"><span class="status-dot"></span><span id="backend-label">Checking compute</span></span>
+      <button id="method-open" class="button method-button"><svg class="icon" aria-hidden="true"><use href="#info"/></svg>Method</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <nav id="workspace-tabs" class="tabs workspace-tabs" role="tablist" aria-label="Workspaces">
+      <a id="histograms-tab" class="button" href="#histograms" role="tab" aria-controls="histograms" aria-selected="true">Histograms</a>
+      <a id="partial-tab" class="button" href="#partial" role="tab" aria-controls="partial" aria-selected="false" tabindex="-1">Partial correlations</a>
+    </nav>
+
+    <div id="histograms" class="workspace" role="tabpanel" aria-labelledby="histograms-tab">
+      <section class="panel editor" aria-labelledby="editor-title">
+        <header class="panel-heading">
+          <span class="step-kicker">1 · Input</span>
+          <h2 id="editor-title">Paint the starting grid</h2>
+          <p>Start with a preset or paint a cell to make its X (column) and Y (row) combination more common.</p>
+        </header>
+
+        <div class="editor-selects">
+          <label>Preset
+            <select id="preset">
+              <option value="custom" disabled>Custom</option>
+              <option value="peaks" selected>Twin peaks</option>
+              <option value="ridge">Diagonal ridge</option>
+              <option value="checker">Checkerboard</option>
+              <option value="uniform">Uniform</option>
+              <option value="clear">Blank canvas</option>
+            </select>
+          </label>
+          <label>Palette
+            <select id="editor-palette">
+              <option value="gray">Grayscale</option><option value="rainbow">Rainbow</option><option value="violet">Violet</option>
+            </select>
+          </label>
+        </div>
+
+        <form id="resolution-form" class="resolution-form" aria-label="Resolution">
+          <span>Grid size</span>
+          <input id="resolution-width" class="number" type="number" inputmode="numeric" min="2" max="64" step="1" value="16" required aria-label="Width (X bins)">
+          <span aria-hidden="true">×</span>
+          <input id="resolution-height" class="number" type="number" inputmode="numeric" min="2" max="64" step="1" value="16" required aria-label="Height (Y bins)">
+          <button class="button" type="submit">Apply</button>
+        </form>
+
+        <div class="editor-toolbar">
+          <div class="tool-group" role="group" aria-label="Painting tools">
+            <button class="button tool active" id="tool-brush" aria-label="Brush" title="Brush (B)" aria-pressed="true"><svg class="icon"><use href="#brush"/></svg><span>Brush</span></button>
+            <button class="button tool" id="erase" aria-label="Eraser" title="Eraser (E)" aria-pressed="false"><svg class="icon"><use href="#eraser"/></svg></button>
+            <button class="button tool" id="pan" aria-label="Pan canvas" title="Pan (H)" aria-pressed="false"><svg class="icon"><use href="#hand"/></svg></button>
+            <button class="button tool" id="tool-undo" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled><svg class="icon"><use href="#undo"/></svg></button>
+          </div>
+          <div class="tool-group" role="group" aria-label="Canvas zoom">
+            <button class="button tool zoom-step" id="zoom-out" aria-label="Zoom out">−</button>
+            <button class="button tool zoom-value" id="zoom-fit" title="Fit canvas" aria-label="Fit canvas">Fit</button>
+            <button class="button tool zoom-step" id="zoom-in" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+
+        <div class="editor-chart">
+          <div class="axis-y" aria-hidden="true"><span>01</span><b>Y</b><span id="axis-y-max">16</span></div>
+          <div id="viewport" class="viewport">
+            <canvas id="paint" tabindex="0" aria-label="Paint a joint histogram" aria-describedby="paint-help"></canvas>
+          </div>
+          <div class="axis-x" aria-hidden="true"><span>01</span><b>X</b><span id="axis-x-max">16</span></div>
+        </div>
+
+        <div id="editor-readout" class="editor-readout"><span>Drag to paint</span><span>256 bins</span></div>
+
+        <div class="brush-settings">
+          <label><span>Brush size <output id="size-value" for="size">1 cell</output></span>
+            <input id="size" type="range" min="1" max="13" step="2" value="1">
+          </label>
+          <label><span>Strength <output id="strength-value" for="strength">35%</output></span>
+            <input id="strength" type="range" min="1" max="100" value="35">
+          </label>
+        </div>
+        <p id="paint-help" class="fine-print">Use arrow keys and Space to paint with the keyboard.</p>
+      </section>
+
+      <section class="panel controls" aria-labelledby="controls-title">
+        <header class="panel-heading">
+          <span class="step-kicker">2 · Simulate</span>
+          <h2 id="controls-title">Privacy settings</h2>
+          <p>Each run uses the same input sample and a fresh draw of privacy noise.</p>
+        </header>
+        <form id="run-form">
+          <div class="field">
+          <label class="form-select">Noise method
+            <select id="mechanism" aria-describedby="mechanism-note">
+              <option value="cells">Laplace per cell</option>
+              <option value="projected">Projected Laplace</option>
+              <option value="moments">Private moments</option>
+              <option value="quadtree">Multiscale quadtree</option>
+              <option value="marginals">Marginals + coarse blocks</option>
+              <option value="cosine">Low-frequency cosine</option>
+            </select>
+          </label>
+          <p id="mechanism-note" class="field-help"></p>
+          </div>
+
+          <div class="field">
+            <div class="field-heading">
+              <label for="epsilon">Privacy budget <var>ε</var></label>
+              <input id="epsilon" class="number" type="number" min="0.05" max="10" step="0.01" value="0.65" required aria-describedby="epsilon-help">
+            </div>
+            <input id="epsilon-slider" type="range" min="0" max="100" aria-label="Privacy budget slider" aria-describedby="epsilon-help">
+            <div class="range-labels"><span>More noise</span><span>Less noise</span></div>
+            <p id="epsilon-help" class="field-help">Smaller ε (epsilon) means stronger privacy and more noise.</p>
+          </div>
+
+          <div class="field">
+            <div class="field-heading">
+              <label for="samples">Sample size <var>N</var></label>
+              <input id="samples" class="number" type="number" min="10" max="250000" step="1" value="1200" required aria-describedby="samples-help">
+            </div>
+            <input id="samples-slider" type="range" min="0" max="100" aria-label="Sample size slider" aria-describedby="samples-help">
+            <div class="range-labels"><span>10</span><span>250k</span></div>
+            <p id="samples-help" class="field-help">N is the number of observations in each input and output sample.</p>
+          </div>
+
+          <label class="form-select">Runs
+            <select id="trials">
+              <option value="1">1 run</option><option value="2">2 runs</option><option value="3" selected>3 runs</option>
+              <option value="4">4 runs</option><option value="5">5 runs</option><option value="6">6 runs</option>
+            </select>
+          </label>
+
+          <details id="histogram-options" class="simulation-options">
+            <summary>More simulation settings</summary>
+            <div class="field">
+              <div class="field-heading">
+                <label for="cutoff">Cosine cutoff</label>
+                <input id="cutoff" class="number" type="number" min="0" max="30" step="1" value="4" required aria-describedby="cutoff-range">
+              </div>
+              <p id="cutoff-range" class="field-help"></p>
+            </div>
+            <label for="seed">Random seed</label>
+            <div class="seed-row">
+              <input id="seed" class="number" type="number" min="0" max="4294967295" step="1" placeholder="Random" aria-label="Random seed">
+              <button id="reuse-seed" type="button" class="button" disabled>Use last seed</button>
+            </div>
+            <p class="field-help">Use the same seed to compare settings on the same random draws.</p>
+          </details>
+
+          <div class="run-actions">
+            <button id="run" type="submit" class="button run-button"><svg class="icon" aria-hidden="true"><use href="#play"/></svg><span>Run simulation</span></button>
+            <button id="histogram-compare" type="button" class="button" aria-controls="sweep" aria-expanded="false">Compare settings</button>
+          </div>
+          <p id="run-status" class="fine-print run-status" role="status"></p>
+        </form>
+      </section>
+
+      <section class="panel results" aria-labelledby="results-title">
+        <header class="panel-heading">
+          <div class="result-heading">
+            <div><span class="step-kicker">3 · Results</span><h2 id="results-title" tabindex="-1">Read the results</h2><p>See which patterns survive and where the synthetic data differs from your painting.</p></div>
+            <label class="result-palette">Palette
+              <select id="result-palette">
+                <option value="rainbow">Rainbow</option><option value="gray">Grayscale</option><option value="violet">Violet</option>
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div id="histogram-single">
+        <div id="empty-results" class="empty-results">Preparing the first simulation…</div>
+        <div id="result-content" hidden>
+          <div class="scoreboard">
+            <div><span>Grid change</span><strong id="mean-tv">—</strong></div>
+            <div><span>Change by axis</span><strong id="mean-axis-tv">—</strong></div>
+            <div><span>Correlation change</span><strong id="mean-correlation">—</strong></div>
+          </div>
+          <dl class="metric-legend fine-print" aria-label="Metric legend">
+            <div><dt>Grid change (joint TV)</dt><dd>The share of probability that would need to move to match your painting.</dd></div>
+            <div><dt>Change by axis (axis TV)</dt><dd>The same comparison for column totals and row totals, averaged.</dd></div>
+            <div><dt>Correlation change (mean |Δr|)</dt><dd>How far the runs’ correlations are from the painting’s, on average.</dd></div>
+          </dl>
+
+          <div class="plot-section">
+            <div class="plot-heading"><h3>Synthetic histograms</h3><span>Probability per bin</span></div>
+            <p class="plot-help field-help">Each plot is one run. Its r score describes how X and Y move together. +1 means the same direction, −1 means opposite directions, and 0 means no linear pattern.</p>
+            <div id="synthetic-plots" class="plots"></div>
+            <div id="sample-legend" class="legend"></div>
+          </div>
+
+          <div class="plot-section loss-section">
+            <div class="plot-heading">
+              <div><h3>Where the grid changed</h3><span>Synthetic − painted</span></div>
+              <div class="tool-group" role="group" aria-label="Loss display">
+                <button class="button tool active" id="loss-signed" aria-pressed="true">Signed</button>
+                <button class="button tool" id="loss-absolute" aria-pressed="false">Absolute</button>
+              </div>
+            </div>
+            <p class="plot-help field-help">Signed shows whether each cell gained or lost probability. Absolute shows the size of the change.</p>
+            <div id="loss-plots" class="plots"></div>
+            <div id="loss-legend" class="legend"></div>
+            <dl class="metric-legend fine-print batch-info" aria-label="Loss notation">
+              <div><dt>Δ and |Δ|</dt><dd>Synthetic minus painted probability in a bin, and the absolute size of that difference.</dd></div>
+              <div><dt>pp</dt><dd>Percentage points. A change from 2% to 3% is +1 pp.</dd></div>
+            </dl>
+          </div>
+          <p id="result-readout" class="result-readout">Hover to preview a bin. Click or tap to pin its stats. Press Esc to clear.</p>
+          <p id="batch-info" class="fine-print batch-info"></p>
+        </div>
+        </div>
+
+    <section id="sweep" class="comparison-view" aria-labelledby="sweep-title" hidden>
+      <header class="comparison-heading">
+        <div><h3 id="sweep-title" tabindex="-1">Compare settings</h3>
+          <p class="field-help">Run the same painting at several settings. Each square combines one row setting with one column setting.</p></div>
+        <button id="histogram-back" class="button" type="button">Back to single run</button>
+      </header>
+
+      <form id="sweep-form">
+        <p class="plot-help field-help">Try privacy budget across the columns and sample size down the rows. Settings you leave fixed come from Privacy settings.</p>
+        <div class="sweep-axes">
+          <fieldset id="sweep-columns" class="sweep-axis">
+            <legend>Columns</legend>
+            <label>Setting to vary<select aria-label="Column parameter"></select></label>
+            <label class="sweep-values">Values
+              <input class="number" type="text" aria-label="Column values" aria-describedby="sweep-values-help" required>
+            </label>
+            <fieldset class="sweep-mechanisms" hidden disabled><legend>Noise methods</legend></fieldset>
+          </fieldset>
+          <fieldset id="sweep-rows" class="sweep-axis">
+            <legend>Rows</legend>
+            <label>Setting to vary<select aria-label="Row parameter"></select></label>
+            <label class="sweep-values">Values
+              <input class="number" type="text" aria-label="Row values" aria-describedby="sweep-values-help" required>
+            </label>
+            <fieldset class="sweep-mechanisms" hidden disabled><legend>Noise methods</legend></fieldset>
+          </fieldset>
+        </div>
+        <p id="sweep-values-help" class="field-help">Enter one value per row or column, separated by commas or spaces.</p>
+        <p id="sweep-cutoff-help" class="field-help" hidden>Cutoff applies to Low-frequency cosine. When the noise method is fixed, a cutoff sweep uses Low-frequency cosine for every cell.</p>
+        <div class="sweep-actions">
+          <button id="sweep-run" class="button run-button" type="submit">Run comparison</button>
+          <button id="sweep-cancel" class="button" type="button" hidden>Cancel comparison</button>
+          <p id="sweep-status" class="fine-print" role="status"></p>
+        </div>
+      </form>
+
+      <div id="sweep-results" class="sweep-results" hidden>
+        <div class="sweep-result-heading">
+          <div>
+            <h3>Comparison grid</h3>
+            <p id="sweep-info" class="fine-print"></p>
+            <p id="sweep-stale" class="fine-print" hidden>Settings changed. Run the sweep to update the grid.</p>
+          </div>
+          <div class="sweep-result-controls">
+            <label>Show
+              <select id="sweep-view">
+                <option value="histogram">Histograms</option>
+                <option value="signed">Signed loss</option>
+                <option value="absolute">Absolute loss</option>
+              </select>
+            </label>
+            <label>Zoom
+              <select id="sweep-zoom">
+                <option value="fit">Fit width</option>
+                <option value="0.125">12.5%</option>
+                <option value="0.25">25%</option>
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+                <option value="1" selected>100%</option>
+                <option value="1.5">150%</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <dl class="metric-legend fine-print" aria-label="Sweep legend">
+          <div><dt>ε (epsilon)</dt><dd>Privacy budget per run. Smaller values add more noise.</dd></div>
+          <div><dt>N</dt><dd>Number of observations in the input sample and in each synthetic run.</dd></div>
+          <div><dt>r</dt><dd>How X and Y move together, from −1 (opposite directions) to +1 (same direction).</dd></div>
+          <div><dt>TV</dt><dd>The share of probability that would need to move to match your painting.</dd></div>
+        </dl>
+        <p class="plot-help field-help">Each chart combines the number of runs in Privacy settings. Switch to loss to see which cells gained or lost probability.</p>
+        <div id="sweep-scroll" class="sweep-scroll" role="region" aria-label="Parameter sweep plots" tabindex="0">
+          <table id="sweep-table" aria-label="Histograms by row and column setting"></table>
+        </div>
+        <p id="sweep-scale-label" class="fine-print"></p>
+        <div id="sweep-legend" class="legend"></div>
+        <dl class="metric-legend fine-print batch-info" aria-label="Loss notation">
+          <div><dt>Δ and |Δ|</dt><dd>Synthetic minus painted probability in a bin, and the absolute size of that difference.</dd></div>
+          <div><dt>pp</dt><dd>Percentage points. A change from 2% to 3% is +1 pp.</dd></div>
+        </dl>
+        <p id="sweep-readout" class="result-readout"></p>
+      </div>
+    </section>
+      </section>
+    </div>
+
+    <section id="partial" class="workspace partial-workspace" role="tabpanel" aria-labelledby="partial-tab" hidden>
+      <section class="panel editor" aria-labelledby="partial-input-title">
+        <header class="panel-heading">
+          <span class="step-kicker">1 · Input</span>
+          <h2 id="partial-input-title" tabindex="-1">Build a starting relationship</h2>
+          <p>Start with Sign reversal. X and Y tend to move together overall, and the pattern reverses after you account for Z.</p>
+        </header>
+        <div class="partial-fields partial-input-fields">
+          <label for="partial-variables">Variables
+            <input id="partial-variables" class="number" type="number" min="3" max="16" step="1" value="4" required>
+          </label>
+          <label for="partial-preset">Synthetic preset
+            <select id="partial-preset">
+              <option value="custom" disabled>Custom</option><option value="reversal">Sign reversal</option>
+              <option value="independent">Independent</option><option value="shared">Shared driver</option>
+            </select>
+          </label>
+        </div>
+        <p id="partial-input-help" class="field-help">Variables that follow the same shared signal tend to move together. A negative weight makes a variable move against that signal. Own variation is change unique to that variable.</p>
+        <p id="partial-input-status" class="fine-print" role="status"></p>
+        <div class="partial-matrix-scroll">
+          <table class="partial-input-table" aria-label="Synthetic variable weights" aria-describedby="partial-input-help">
+            <thead><tr><th scope="col">Variable</th><th scope="col">Shared A</th><th scope="col">Shared B</th><th scope="col">Own variation</th></tr></thead>
+            <tbody id="partial-factors"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel controls" aria-labelledby="partial-settings-title">
+      <header class="panel-heading">
+        <span class="step-kicker">2 · Simulate</span>
+        <h2 id="partial-settings-title">Privacy settings</h2>
+        <p>Run the same sample with different draws of privacy noise, then see which relationships survive.</p>
+      </header>
+      <form id="partial-form">
+        <div class="partial-fields">
+          <div class="field">
+            <label for="partial-mechanism">Noise method</label>
+            <select id="partial-mechanism" aria-describedby="partial-mechanism-help"></select>
+            <p id="partial-mechanism-help" class="field-help"></p>
+          </div>
+          <div class="field">
+            <div class="field-heading"><label for="partial-epsilon">Privacy budget <var>ε</var></label>
+              <input id="partial-epsilon" class="number" type="number" min="0.05" max="10" step="0.01" value="1" required aria-describedby="partial-epsilon-help"></div>
+            <input id="partial-epsilon-slider" type="range" min="0" max="100" aria-label="Privacy budget slider" aria-describedby="partial-epsilon-help">
+            <div class="range-labels"><span>More noise</span><span>Less noise</span></div>
+            <p id="partial-epsilon-help" class="field-help">Smaller ε (epsilon) means stronger privacy and more noise.</p>
+          </div>
+          <div class="field">
+            <div class="field-heading"><label for="partial-samples">Sample size <var>N</var></label>
+              <input id="partial-samples" class="number" type="number" min="10" max="250000" step="1" value="2000" required aria-describedby="partial-samples-help"></div>
+            <input id="partial-samples-slider" type="range" min="0" max="100" aria-label="Sample size slider" aria-describedby="partial-samples-help">
+            <div class="range-labels"><span>10</span><span>250k</span></div>
+            <p id="partial-samples-help" class="field-help">N is the number of observations in the shared input sample.</p>
+          </div>
+          <div class="field">
+            <label for="partial-trials">Runs</label>
+            <input id="partial-trials" class="number" type="number" min="1" max="256" step="1" value="64" required aria-describedby="partial-trials-help">
+            <p id="partial-trials-help" class="field-help">More runs show how much the estimate varies when only the noise changes.</p>
+          </div>
+        </div>
+        <details id="partial-options" class="simulation-options">
+          <summary>More simulation settings</summary>
+          <div class="partial-fields">
+            <div class="field"><label for="partial-floor">Stabilization floor</label>
+              <input id="partial-floor" class="number" type="number" min="0.000001" max="1" step="any" value="0.001" required aria-describedby="partial-floor-help">
+              <p id="partial-floor-help" class="field-help">A larger floor makes fragile estimates steadier and pulls them toward zero.</p></div>
+            <div class="field"><label for="partial-share">Budget share for pairs</label>
+              <input id="partial-share" class="number" type="number" min="0.05" max="0.95" step="any" value="0.7" required aria-describedby="partial-share-help">
+              <p id="partial-share-help" class="field-help">Split-budget moments spends this share on pair products. 0.7 means 70%.</p></div>
+            <div class="field"><label for="partial-seed">Random seed</label>
+              <div class="seed-row"><input id="partial-seed" class="number" type="number" min="0" max="4294967295" step="1" value="89" placeholder="Random" aria-describedby="partial-seed-help">
+                <button id="partial-reuse-seed" class="button" type="button" disabled>Use last seed</button></div>
+              <p id="partial-seed-help" class="field-help">Reuse a seed to repeat the random draws, or leave it blank for a fresh draw.</p></div>
+          </div>
+        </details>
+        <div class="run-actions">
+          <button id="partial-run" class="button run-button" type="submit"><svg class="icon" aria-hidden="true"><use href="#play"/></svg><span>Run simulation</span></button>
+          <button id="partial-compare" class="button" type="button" aria-controls="partial-sweep-panel" aria-expanded="false">Compare settings</button>
+        </div>
+        <p id="partial-status" class="fine-print run-status" role="status"></p>
+      </form>
+      </section>
+
+      <section class="panel results" aria-labelledby="partial-results-title">
+      <header class="panel-heading">
+        <div class="result-heading">
+          <div><span class="step-kicker">3 · Results</span><h2 id="partial-results-title" tabindex="-1">Read the results</h2>
+            <p>See whether a relationship survives privacy noise after you account for another variable.</p></div>
+          <label for="partial-palette" class="result-palette">Palette
+            <select id="partial-palette">
+              <option value="signed">Signed</option><option value="gray">Grayscale</option><option value="rainbow">Rainbow</option><option value="violet">Violet</option>
+            </select>
+          </label>
+        </div>
+      </header>
+      <div id="partial-single">
+      <div id="partial-empty-results" class="empty-results">Run a simulation to see results.</div>
+      <div id="partial-results" class="partial-results" hidden>
+        <div class="partial-result-heading">
+          <p id="partial-info" class="fine-print"></p>
+          <label for="partial-control">Control variable
+            <select id="partial-control" aria-describedby="partial-control-help"></select>
+          </label>
+        </div>
+        <p id="partial-control-help" class="plot-help field-help">Pick a control to set aside the pattern shared with that variable. With Z as the control, the X–Y cell shows how X and Y move together after accounting for Z.</p>
+        <p id="partial-matrix-help" class="field-help">Select a cell to read its pair in plain language. An asterisk means the control explains most of the variation in at least one variable.</p>
+        <div class="partial-matrices" id="partial-matrices">
+          <section class="partial-matrix" aria-labelledby="partial-original-title">
+            <h3 id="partial-original-title">Before adding noise</h3>
+            <div class="partial-matrix-scroll"><table id="partial-original" aria-labelledby="partial-original-title" aria-describedby="partial-matrix-help"></table></div>
+            <div class="legend symmetric partial-scale"><span>−1</span><span class="legend-bar"></span><span>0</span><span class="legend-bar"></span><span>+1</span></div>
+          </section>
+          <section class="partial-matrix" aria-labelledby="partial-private-title">
+            <h3 id="partial-private-title">Typical with noise</h3>
+            <div class="partial-matrix-scroll"><table id="partial-private" aria-labelledby="partial-private-title" aria-describedby="partial-matrix-help"></table></div>
+            <div class="legend symmetric partial-scale"><span>−1</span><span class="legend-bar"></span><span>0</span><span class="legend-bar"></span><span>+1</span></div>
+          </section>
+          <section class="partial-matrix" aria-labelledby="partial-error-title">
+            <h3 id="partial-error-title">Change due to noise</h3>
+            <div class="partial-matrix-scroll"><table id="partial-error" aria-labelledby="partial-error-title" aria-describedby="partial-matrix-help"></table></div>
+            <div class="legend symmetric partial-scale"><span>−2</span><span class="legend-bar"></span><span>0</span><span class="legend-bar"></span><span>+2</span></div>
+          </section>
+        </div>
+
+        <section class="partial-detail" aria-labelledby="partial-pair-title" aria-live="polite">
+          <h3 id="partial-pair-title"></h3>
+          <dl class="partial-metrics">
+            <div><dt>Original, no control</dt><dd id="partial-pair-ordinary"></dd></div>
+            <div><dt>Original, with control</dt><dd id="partial-pair-original"></dd></div>
+            <div><dt>Typical with noise</dt><dd id="partial-pair-median"></dd></div>
+            <div><dt>Change due to noise</dt><dd id="partial-pair-delta"></dd></div>
+          </dl>
+          <div class="partial-track" id="partial-track" aria-hidden="true">
+            <span class="partial-interval"></span><span class="partial-reference"></span><span class="partial-median"></span>
+          </div>
+          <div class="partial-track-axis fine-print" aria-hidden="true"><span>−1</span><span>0</span><span>+1</span></div>
+          <p id="partial-pair-direction" class="fine-print"></p>
+          <p id="partial-pair-spread" class="fine-print"></p>
+          <p id="partial-pair-warning" class="fine-print" hidden>After accounting for the control, one of these variables barely varies. Even a little noise can swing the estimate.</p>
+        </section>
+      </div>
+
+      <details class="partial-method fine-print">
+        <summary>Notation and method</summary>
+        <dl class="metric-legend">
+          <div><dt>N</dt><dd>Observations in the shared synthetic sample.</dd></div>
+          <div><dt>ε (epsilon)</dt><dd>Privacy budget per run. Smaller values add more noise.</dd></div>
+          <div><dt>r</dt><dd>Pearson correlation from −1 to +1. Positive means higher values tend to go together. Negative means higher values of one tend to go with lower values of the other. Partial r measures that pattern after accounting for the control.</dd></div>
+          <div><dt>Δr</dt><dd>Private median partial r minus original partial r.</dd></div>
+          <div><dt>*</dt><dd>Less than 5% of either variable’s variance remains after adjustment in the original sample.</dd></div>
+        </dl>
+        <p>The vertical mark shows the original estimate. The dot shows the middle estimate when runs are sorted, and the band covers about 8 in 10 estimates. Each run uses the same data and a fresh draw of Laplace noise. The stabilization floor limits how close the noisy covariance can get to singular. Raising it can make estimates more stable and pull them toward zero.</p>
+        <p><a href="https://www.cis.upenn.edu/~aaroth/Papers/privacybook.pdf" target="_blank" rel="noopener noreferrer">Laplace mechanism reference ↗</a></p>
+      </details>
+      </div>
+      <section id="partial-sweep-panel" class="comparison-view" aria-labelledby="partial-compare-title" hidden>
+        <header class="comparison-heading">
+          <div><h3 id="partial-compare-title" tabindex="-1">Compare settings</h3>
+            <p class="field-help">Choose a pair and a control. Each square combines one row setting with one column setting.</p></div>
+          <button id="partial-back" class="button" type="button">Back to single run</button>
+        </header>
+        <form id="partial-sweep-form">
+          <div class="partial-fields partial-input-fields">
+            <label for="partial-sweep-control">Control variable<select id="partial-sweep-control"></select></label>
+            <label for="partial-sweep-pair">Variable pair<select id="partial-sweep-pair"></select></label>
+          </div>
+          <div class="sweep-axes">
+            <fieldset id="partial-sweep-columns" class="sweep-axis">
+              <legend>Columns</legend>
+              <label>Setting to vary<select aria-label="Correlation sweep column parameter"></select></label>
+              <label class="sweep-values">Values<input class="number" type="text" aria-label="Correlation sweep column values" required></label>
+              <fieldset class="sweep-mechanisms" hidden disabled><legend>Noise methods</legend></fieldset>
+            </fieldset>
+            <fieldset id="partial-sweep-rows" class="sweep-axis">
+              <legend>Rows</legend>
+              <label>Setting to vary<select aria-label="Correlation sweep row parameter"></select></label>
+              <label class="sweep-values">Values<input class="number" type="text" aria-label="Correlation sweep row values" required></label>
+              <fieldset class="sweep-mechanisms" hidden disabled><legend>Noise methods</legend></fieldset>
+            </fieldset>
+          </div>
+          <p class="field-help">Enter one value per row or column, separated by commas or spaces. Settings you leave fixed come from Input and Privacy settings.</p>
+          <div class="sweep-actions">
+            <button id="partial-sweep-run" class="button run-button" type="submit">Run comparison</button>
+            <button id="partial-sweep-cancel" class="button" type="button" hidden>Cancel comparison</button>
+            <p id="partial-sweep-status" class="fine-print" role="status"></p>
+          </div>
+        </form>
+        <div id="partial-sweep-results" class="sweep-results" hidden>
+          <div class="partial-result-heading">
+            <div><h3 id="partial-sweep-title">Correlation sweep</h3><p id="partial-sweep-info" class="fine-print"></p></div>
+            <label for="partial-sweep-zoom">Zoom
+              <select id="partial-sweep-zoom"><option value="fit">Fit width</option><option value="0.125">12.5%</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.5">150%</option></select>
+            </label>
+          </div>
+          <p class="plot-help field-help">Each bar counts how often runs landed in part of the −1 to +1 range. The vertical mark is the estimate before noise. All charts share the same scales.</p>
+          <div id="partial-sweep-scroll" class="sweep-scroll" role="region" aria-labelledby="partial-sweep-title" tabindex="0">
+            <table id="partial-sweep-table" aria-labelledby="partial-sweep-title"></table>
+          </div>
+          <p id="partial-sweep-readout" class="result-readout"></p>
+        </div>
+      </section>
+      </section>
+    </section>
+
+    <footer class="site-footer"><span>Runs in your browser</span><span>Inputs and settings are saved in this browser.</span></footer>
+  </main>
+
+  <dialog id="method-dialog" aria-labelledby="method-title">
+    <div class="dialog-header"><h2 id="method-title">How the simulation works</h2><form method="dialog"><button class="button tool" aria-label="Close method"><svg class="icon"><use href="#close"/></svg></button></form></div>
+    <h3>From painting to synthetic data</h3>
+    <p>The lab normalizes the painted weights and draws one input histogram of <em>N</em> observations. Each run privatizes that same histogram and then draws <em>N</em> synthetic observations. Reuse a seed to compare methods with the same input draw.</p>
+    <h3>How each method adds noise</h3>
+    <ul>
+      <li><strong>Laplace per cell.</strong> Add independent Laplace noise with scale 2/ε to each count, clamp negatives, and normalize. If every count is zero, use a uniform distribution.</li>
+      <li><strong>Projected Laplace.</strong> Start with the same noisy counts and find the nearest nonnegative table summing to the public <em>N</em>. The shared offset often removes small noise-only counts.</li>
+      <li><strong>Private moments.</strong> Map ordered buckets to [−1, 1]. Spend ε/5 on each of the means of X, Y, X², Y², and XY, using the range divided by <em>N</em> for sensitivity. Fit a regularized maximum-entropy distribution to target Pearson correlation.</li>
+      <li><strong>Multiscale quadtree.</strong> Split ε across the levels of a public spatial tree. Noise the region counts at each level, combine estimates across scales, and reconcile children to their parent totals. <a href="https://arxiv.org/abs/0904.0942" target="_blank" rel="noopener noreferrer">Hierarchical consistency ↗</a></li>
+      <li><strong>Marginals + coarse blocks.</strong> Spend ε/3 on each of the two fine axis histograms and a coarse joint table. Reconcile the block totals to the noisy axis histograms, then distribute mass inside each block using the two within-block marginals. <a href="https://proceedings.mlr.press/v97/mckenna19a.html" target="_blank" rel="noopener noreferrer">Inference from noisy measurements ↗</a></li>
+      <li><strong>Low-frequency cosine.</strong> Split ε across the nonconstant 2D cosine modes up to the selected total order. Higher cutoffs retain finer detail and increase the noise scale per coefficient. Noise the bounded coefficient sums, invert the truncated transform, and project to a nonnegative table with total <em>N</em>. A cutoff of zero gives a uniform fit. <a href="https://arxiv.org/abs/0811.2501" target="_blank" rel="noopener noreferrer">Private orthogonal series ↗</a></li>
+    </ul>
+    <h3>What the comparisons measure</h3>
+    <p>Loss is synthetic minus painted probability, so it includes both sampling variation and privacy noise. Joint TV is half the sum of absolute cell losses. Axis TV averages the same distance on the X and Y marginals. Pearson r uses bucket indices and is undefined if either axis has zero variance.</p>
+    <p>Partial correlations use separate synthetic data from the Input tab. They measure how two variables move together after removing the linear relationship each has with the chosen control.</p>
+    <p>All methods use fixed-size, replace-one adjacency and a per-run ε. The seeded simulation, original table, and loss tables are for exploration with synthetic inputs. Publishing multiple private runs on real data would require composition accounting.</p>
+    <a href="https://projects.iq.harvard.edu/files/privacytools/files/the_algorithmic_foundations_of_differential_privacy.pdf" target="_blank" rel="noopener noreferrer">Laplace mechanism reference ↗</a>
+  </dialog>
+</body>
+</html>
